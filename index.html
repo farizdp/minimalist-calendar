@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Calendar</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@700&family=Cormorant+Garamond:wght@300&family=DM+Mono:wght@300&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  background-color: #111111;
+  transition: background-color 0.65s cubic-bezier(0.4, 0, 0.2, 1);
+  font-family: 'DM Mono', 'Courier New', monospace;
+  font-weight: 300;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: pointer;
+}
+
+body.theme-arsenal     { background-color: #EF0107; }
+body.theme-holiday     { background-color: #0D1B2A; }
+body.theme-both        { background-color: #EF0107; }
+
+/* Directional cursor hints */
+.nav-hint {
+  position: fixed;
+  top: 50%;
+  transform: translateY(-50%);
+  font-family: 'DM Mono', monospace;
+  font-size: 0.6rem;
+  letter-spacing: 0.3em;
+  color: rgba(245,240,232,0.25);
+  opacity: 0;
+  transition: opacity 0.2s ease, color 0.5s ease;
+  pointer-events: none;
+  z-index: 20;
+}
+.nav-hint.left  { left: 2.5vw; }
+.nav-hint.right { right: 2.5vw; }
+
+body:hover .nav-hint { opacity: 1; }
+body.theme-arsenal .nav-hint, body.theme-both .nav-hint { color: rgba(255,255,255,0.35); }
+body.theme-holiday .nav-hint { color: rgba(200,169,110,0.3); }
+
+/* Today button */
+.today-btn {
+  position: fixed;
+  top: 5vh;
+  right: 6vw;
+  font-family: 'DM Mono', monospace;
+  font-size: 0.58rem;
+  font-weight: 300;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(245,240,232,0.35);
+  border: 1px solid rgba(245,240,232,0.18);
+  padding: 0.45rem 0.85rem;
+  background: none;
+  outline: none;
+  cursor: pointer;
+  z-index: 30;
+  transition: color 0.3s, border-color 0.3s;
+}
+.today-btn:hover { color: rgba(245,240,232,0.85); border-color: rgba(245,240,232,0.5); }
+body.theme-arsenal .today-btn,
+body.theme-both .today-btn  { color: rgba(255,255,255,0.55); border-color: rgba(255,255,255,0.3); }
+body.theme-arsenal .today-btn:hover,
+body.theme-both .today-btn:hover { color: rgba(255,255,255,0.95); border-color: rgba(255,255,255,0.7); }
+body.theme-holiday .today-btn { color: rgba(200,169,110,0.4); border-color: rgba(200,169,110,0.2); }
+body.theme-holiday .today-btn:hover { color: rgba(200,169,110,0.9); border-color: rgba(200,169,110,0.5); }
+
+/* App layout */
+#app {
+  height: 100vh;
+  display: grid;
+  grid-template-rows: 1fr auto;
+  padding: 5vh 7vw 4vh;
+  pointer-events: none;
+}
+
+/* Hero */
+.hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* Date column (number + brush mark) */
+.date-col {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+/* Date number */
+.date-number {
+  font-family: 'Caveat', cursive;
+  font-size: clamp(9rem, 38vh, 34rem);
+  line-height: 0.82;
+  color: #f5f0e8;
+  letter-spacing: -0.03em;
+  display: flex;
+  align-items: baseline;
+  transition: color 0.5s ease;
+}
+body.theme-arsenal .date-number,
+body.theme-both .date-number { color: #ffffff; }
+body.theme-holiday .date-number { color: #f5f0e8; }
+
+/* Brush-stroke accent under date */
+.date-mark {
+  width: clamp(3rem, 13vh, 11rem);
+  height: clamp(0.35rem, 1.3vh, 1.2rem);
+  background: currentColor;
+  color: #f5f0e8;
+  border-radius: 999px;
+  transform: rotate(-4deg);
+  margin-top: clamp(-0.9rem, -3vh, -2rem);
+  margin-left: clamp(0.3rem, 0.8vw, 0.9rem);
+  opacity: 0.9;
+  transition: color 0.5s ease;
+}
+body.theme-arsenal .date-mark,
+body.theme-both .date-mark { color: #ffffff; }
+body.theme-holiday .date-mark { color: #f5f0e8; }
+
+/* Arsenal "!" indicator */
+.date-bang {
+  display: inline-block;
+  max-width: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: max-width 0.4s cubic-bezier(0.34, 1.56, 0.64, 1),
+              opacity 0.3s ease;
+}
+.date-bang.on {
+  max-width: 1em;
+  opacity: 1;
+}
+
+/* Info column */
+.info-col {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: clamp(0.5rem, 1.2vh, 1rem);
+  padding-bottom: 0.4rem;
+  text-align: right;
+}
+
+.year-tag {
+  font-size: clamp(0.62rem, 0.95vw, 0.82rem);
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: rgba(245,240,232,0.28);
+  transition: color 0.5s ease;
+}
+body.theme-arsenal .year-tag,
+body.theme-both .year-tag { color: rgba(255,255,255,0.75); }
+body.theme-holiday .year-tag { color: rgba(200,169,110,0.38); }
+
+.month-name {
+  font-family: 'Cormorant Garamond', 'Georgia', serif;
+  font-size: clamp(2.4rem, 7vw, 8.5rem);
+  font-weight: 300;
+  line-height: 0.93;
+  color: rgba(245,240,232,0.88);
+  letter-spacing: -0.01em;
+  transition: color 0.5s ease;
+}
+body.theme-arsenal .month-name,
+body.theme-both .month-name { color: #ffffff; }
+body.theme-holiday .month-name { color: #c8a96e; }
+
+.day-name {
+  font-size: clamp(0.65rem, 1.05vw, 0.85rem);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(245,240,232,0.32);
+  transition: color 0.5s ease;
+}
+body.theme-arsenal .day-name,
+body.theme-both .day-name { color: rgba(255,255,255,0.85); }
+body.theme-holiday .day-name { color: rgba(200,169,110,0.45); }
+
+.remark-list {
+  margin-top: clamp(0.2rem, 0.8vh, 0.7rem);
+  display: flex;
+  flex-direction: column;
+  gap: 0.28rem;
+}
+
+.remark-item {
+  font-size: clamp(0.62rem, 0.88vw, 0.78rem);
+  letter-spacing: 0.04em;
+  line-height: 1.55;
+  color: rgba(245,240,232,0.58);
+  transition: color 0.5s ease;
+}
+body.theme-arsenal .remark-item,
+body.theme-both .remark-item { color: rgba(255,255,255,0.88); }
+body.theme-holiday .remark-item { color: rgba(200,169,110,0.82); }
+
+/* Month strip */
+.month-strip-wrap {
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  pointer-events: auto;
+  position: relative;
+  z-index: 25;
+}
+.month-strip-wrap::-webkit-scrollbar { display: none; }
+
+.month-strip {
+  display: flex;
+  gap: clamp(0.35rem, 0.75vw, 0.65rem);
+  padding-bottom: 2px;
+  width: max-content;
+}
+
+.strip-day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  padding: 0.25rem 0.35rem;
+  transition: opacity 0.2s;
+  pointer-events: auto;
+}
+.strip-day:hover { opacity: 0.6; }
+
+.strip-num {
+  font-size: clamp(0.5rem, 0.78vw, 0.66rem);
+  letter-spacing: 0.04em;
+  color: rgba(245,240,232,0.28);
+  transition: color 0.5s;
+  line-height: 1;
+}
+.strip-day.is-cur .strip-num {
+  color: rgba(245,240,232,0.88);
+}
+body.theme-arsenal .strip-num,
+body.theme-both .strip-num { color: rgba(255,255,255,0.35); }
+body.theme-arsenal .strip-day.is-cur .strip-num,
+body.theme-both .strip-day.is-cur .strip-num { color: rgba(255,255,255,0.95); }
+body.theme-holiday .strip-num { color: rgba(200,169,110,0.3); }
+body.theme-holiday .strip-day.is-cur .strip-num { color: rgba(200,169,110,0.88); }
+
+.strip-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: transparent;
+  transition: background 0.3s;
+}
+.strip-dot.d-cur     { background: rgba(245,240,232,0.55); }
+.strip-dot.d-arsenal { background: #EF0107; }
+.strip-dot.d-holiday { background: #c8a96e; }
+
+body.theme-arsenal .strip-dot.d-cur,
+body.theme-both .strip-dot.d-cur { background: rgba(255,255,255,0.6); }
+body.theme-holiday .strip-dot.d-cur { background: rgba(200,169,110,0.55); }
+
+/* Slide animation on date change */
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-in {
+  animation: slideUp 0.22s ease forwards;
+}
+</style>
+</head>
+<body>
+
+<span class="nav-hint left">←</span>
+<span class="nav-hint right">→</span>
+<button class="today-btn" id="todayBtn">Today</button>
+
+<div id="app">
+  <div class="hero">
+    <div class="date-col">
+      <div class="date-number">
+        <span id="dateDigits"></span><span class="date-bang" id="dateBang">!</span>
+      </div>
+      <div class="date-mark"></div>
+    </div>
+    <div class="info-col">
+      <div class="year-tag"  id="yearTag"></div>
+      <div class="month-name" id="monthName"></div>
+      <div class="day-name"  id="dayName"></div>
+      <div class="remark-list" id="remarkList"></div>
+    </div>
+  </div>
+  <div class="month-strip-wrap">
+    <div class="month-strip" id="monthStrip"></div>
+  </div>
+</div>
+
+<script>
+/* ── Embedded Arsenal fixture data (fallback when live fetch fails) ── */
+const ARSENAL_ICS = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+DTSTART:20260407T190000Z
+SUMMARY:Sporting CP vs Arsenal (A)
+LOCATION:Estádio José Alvalade, Lisbon
+DESCRIPTION:UEFA Champions League | Matchweek 13
+END:VEVENT
+BEGIN:VEVENT
+DTSTART:20260411T113000Z
+SUMMARY:Arsenal vs Bournemouth (H)
+LOCATION:Emirates Stadium, London
+DESCRIPTION:Premier League | Matchweek 32
+END:VEVENT
+BEGIN:VEVENT
+DTSTART:20260415T190000Z
+SUMMARY:Arsenal vs Sporting CP (H)
+LOCATION:Emirates Stadium, London
+DESCRIPTION:UEFA Champions League | Matchweek 14
+END:VEVENT
+BEGIN:VEVENT
+DTSTART:20260419T153000Z
+SUMMARY:Manchester City vs Arsenal (A)
+LOCATION:Etihad Stadium, Manchester
+DESCRIPTION:Premier League | Matchweek 33
+END:VEVENT
+BEGIN:VEVENT
+DTSTART:20260425T163000Z
+SUMMARY:Arsenal vs Newcastle United (H)
+LOCATION:Emirates Stadium, London
+DESCRIPTION:Premier League | Matchweek 34
+END:VEVENT
+BEGIN:VEVENT
+DTSTART:20260429T190000Z
+SUMMARY:Atlético de Madrid vs Arsenal (A)
+LOCATION:Riyadh Air Metropolitano, Madrid
+DESCRIPTION:UEFA Champions League | Matchweek 15
+END:VEVENT
+BEGIN:VEVENT
+DTSTART:20260502T163000Z
+SUMMARY:Arsenal vs Fulham (H)
+LOCATION:Emirates Stadium, London
+DESCRIPTION:Premier League | Matchweek 35
+END:VEVENT
+BEGIN:VEVENT
+DTSTART:20260505T190000Z
+SUMMARY:Arsenal vs Atlético de Madrid (H)
+LOCATION:Emirates Stadium, London
+DESCRIPTION:UEFA Champions League | Matchweek 16
+END:VEVENT
+BEGIN:VEVENT
+DTSTART:20260510T153000Z
+SUMMARY:West Ham United vs Arsenal (A)
+LOCATION:London Stadium, London
+DESCRIPTION:Premier League | Matchweek 36
+END:VEVENT
+BEGIN:VEVENT
+DTSTART:20260517T140000Z
+SUMMARY:Arsenal vs Burnley (H)
+LOCATION:Emirates Stadium, London
+DESCRIPTION:Premier League | Matchweek 37
+END:VEVENT
+BEGIN:VEVENT
+DTSTART:20260524T150000Z
+SUMMARY:Crystal Palace vs Arsenal (A)
+LOCATION:Selhurst Park, London
+DESCRIPTION:Premier League | Matchweek 38
+END:VEVENT
+BEGIN:VEVENT
+DTSTART:20260805T183000Z
+SUMMARY:Arsenal v Real Betis (N)
+LOCATION:Aviva Stadium
+DESCRIPTION:Pre-season
+END:VEVENT
+END:VCALENDAR`;
+
+/* ── Constants ── */
+const MONTHS = ['January','February','March','April','May','June',
+                'July','August','September','October','November','December'];
+const DAYS   = ['SUN','MON','TUE','WED','THU','FRI','SAT'];
+
+/* ── Helpers ── */
+function dateKey(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+function parseIcs(text) {
+  const map = new Map();
+  const blocks = text.split('BEGIN:VEVENT').slice(1);
+  for (const block of blocks) {
+    const dtm  = block.match(/^DTSTART[^:]*:(\d{8})/m);
+    const sum  = block.match(/^SUMMARY:(.+)/m);
+    const loc  = block.match(/^LOCATION:(.+)/m);
+    const desc = block.match(/^DESCRIPTION:(.+)/m);
+    if (!dtm || !sum) continue;
+    const s = dtm[1];
+    const key = `${s.slice(0,4)}-${s.slice(4,6)}-${s.slice(6,8)}`;
+    const summary     = sum[1].trim();
+    const location    = (loc?.[1] || '').trim().replace(/\\,/g, ',').replace(/\\/g, '');
+    const competition = (desc?.[1] || '').trim().split('|')[0].trim();
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push({ summary, location, competition });
+  }
+  return map;
+}
+
+/* ── App ── */
+class Calendar {
+  constructor() {
+    this.today      = new Date();
+    this.current    = new Date(this.today);
+    this.arsenalMap = parseIcs(ARSENAL_ICS);
+    this.holidayMap = new Map();
+
+    this._$ = id => document.getElementById(id);
+
+    /* today button */
+    this._$('todayBtn').addEventListener('click', e => {
+      e.stopPropagation();
+      this.jump(new Date(this.today));
+    });
+
+    /* click-anywhere navigation (left half = prev, right half = next) */
+    document.addEventListener('click', e => {
+      if (e.target.closest('#todayBtn, .month-strip-wrap')) return;
+      this.go(e.clientX > window.innerWidth / 2 ? 1 : -1);
+    });
+
+    /* keyboard */
+    document.addEventListener('keydown', e => {
+      if (e.key === 'ArrowLeft'  || e.key === 'h') this.go(-1);
+      if (e.key === 'ArrowRight' || e.key === 'l') this.go(1);
+      if (e.key === 'Home'       || e.key === 't') this.jump(new Date(this.today));
+    });
+
+    /* touch swipe */
+    let tx = 0;
+    document.addEventListener('touchstart', e => { tx = e.touches[0].clientX; }, { passive: true });
+    document.addEventListener('touchend', e => {
+      const dx = e.changedTouches[0].clientX - tx;
+      if (Math.abs(dx) > 50) this.go(dx < 0 ? 1 : -1);
+    }, { passive: true });
+
+    /* cursor direction hint */
+    document.addEventListener('mousemove', e => {
+      document.body.style.cursor = e.clientX > window.innerWidth / 2 ? 'e-resize' : 'w-resize';
+    });
+
+    /* initial render then load async data */
+    this.render();
+    this.fetchHolidays().then(() => this.render());
+    this.fetchLiveArsenal().catch(() => {});
+  }
+
+  go(delta) {
+    const d = new Date(this.current);
+    d.setDate(d.getDate() + delta);
+    this.current = d;
+    this.render(true);
+  }
+
+  jump(date) {
+    this.current = date;
+    this.render(true);
+  }
+
+  async fetchHolidays() {
+    const year     = this.today.getFullYear();
+    const cacheKey = `holidays_${year}`;
+    try {
+      const cached = sessionStorage.getItem(cacheKey);
+      let data = cached ? JSON.parse(cached) : null;
+
+      if (!data) {
+        for (const url of ['https://libur.deno.dev/api']) {
+          try {
+            const r = await fetch(url, { signal: AbortSignal.timeout(6000) });
+            if (r.ok) { data = await r.json(); break; }
+          } catch { /* try next */ }
+        }
+        if (data) sessionStorage.setItem(cacheKey, JSON.stringify(data));
+      }
+      if (!data) return;
+
+      const ingest = (rawDate, name) => {
+        if (rawDate && name) this.holidayMap.set(String(rawDate).slice(0,10), String(name));
+      };
+
+      if (Array.isArray(data)) {
+        for (const h of data) {
+          ingest(h.tanggal ?? h.date ?? h.holiday_date,
+                 h.keterangan ?? h.localName ?? h.name ?? h.holiday_name);
+        }
+      } else {
+        for (const [k, v] of Object.entries(data)) {
+          ingest(k, typeof v === 'string' ? v : (v?.keterangan ?? v?.name ?? ''));
+        }
+      }
+    } catch { /* silent */ }
+  }
+
+  async fetchLiveArsenal() {
+    const url = 'https://ics.ecal.com/ecal-sub/69e78417a04db9000291d29e/Arsenal%20FC.ics';
+    const r   = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    if (!r.ok) return;
+    const text = await r.text();
+    const fresh = parseIcs(text);
+    if (fresh.size > 0) {
+      this.arsenalMap = fresh;
+      this.render();
+    }
+  }
+
+  render(animate = false) {
+    const d       = this.current;
+    const key     = dateKey(d);
+    const arsenal = this.arsenalMap.get(key) ?? [];
+    const holiday = this.holidayMap.get(key) ?? null;
+
+    const isArsenal = arsenal.length > 0;
+    const isHoliday = !!holiday;
+
+    /* theme */
+    document.body.className =
+      isArsenal && isHoliday ? 'theme-both'
+      : isArsenal             ? 'theme-arsenal'
+      : isHoliday             ? 'theme-holiday'
+      : '';
+
+    /* date number */
+    const digitsEl = this._$('dateDigits');
+    const bangEl   = this._$('dateBang');
+
+    if (animate) {
+      [digitsEl, this._$('monthName')].forEach(el => {
+        el.classList.remove('animate-in');
+        void el.offsetWidth;
+        el.classList.add('animate-in');
+      });
+    }
+
+    digitsEl.textContent = d.getDate();
+    bangEl.className = 'date-bang' + (isArsenal ? ' on' : '');
+
+    /* meta */
+    this._$('yearTag').textContent   = d.getFullYear();
+    this._$('monthName').textContent = MONTHS[d.getMonth()];
+    this._$('dayName').textContent   = DAYS[d.getDay()];
+
+    /* remarks */
+    const remarkList = this._$('remarkList');
+    remarkList.innerHTML = '';
+    for (const m of arsenal) {
+      const el = document.createElement('div');
+      el.className = 'remark-item';
+      el.textContent = m.competition ? `${m.summary} · ${m.competition}` : m.summary;
+      remarkList.appendChild(el);
+    }
+    if (holiday) {
+      const el = document.createElement('div');
+      el.className = 'remark-item';
+      el.textContent = holiday;
+      remarkList.appendChild(el);
+    }
+
+    /* month strip */
+    this.renderStrip();
+  }
+
+  renderStrip() {
+    const strip   = this._$('monthStrip');
+    const d       = this.current;
+    const y       = d.getFullYear();
+    const m       = d.getMonth();
+    const days    = new Date(y, m + 1, 0).getDate();
+    const curDay  = d.getDate();
+
+    strip.innerHTML = '';
+
+    for (let i = 1; i <= days; i++) {
+      const dayDate = new Date(y, m, i);
+      const key     = dateKey(dayDate);
+      const hasA    = this.arsenalMap.has(key);
+      const hasH    = this.holidayMap.has(key);
+      const isCur   = i === curDay;
+
+      const el  = document.createElement('div');
+      el.className = 'strip-day' + (isCur ? ' is-cur' : '');
+
+      const num = document.createElement('div');
+      num.className   = 'strip-num';
+      num.textContent = i;
+
+      const dot = document.createElement('div');
+      dot.className = 'strip-dot';
+      if (isCur)  dot.classList.add('d-cur');
+      if (hasA)   dot.classList.add('d-arsenal');
+      if (hasH)   dot.classList.add('d-holiday');
+
+      el.append(num, dot);
+
+      const di = i;
+      el.addEventListener('click', e => {
+        e.stopPropagation();
+        this.jump(new Date(y, m, di));
+      });
+
+      strip.appendChild(el);
+    }
+
+    requestAnimationFrame(() => {
+      const cur = strip.querySelector('.is-cur');
+      if (cur) cur.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    });
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => new Calendar());
+</script>
+</body>
+</html>
