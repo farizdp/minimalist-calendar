@@ -313,82 +313,6 @@ body.theme-holiday .strip-dot.d-cur { background: rgba(200,169,110,0.55); }
 </div>
 
 <script>
-/* ── Embedded Arsenal fixture data (fallback when live fetch fails) ── */
-const ARSENAL_ICS = `BEGIN:VCALENDAR
-VERSION:2.0
-BEGIN:VEVENT
-DTSTART:20260407T190000Z
-SUMMARY:Sporting CP vs Arsenal (A)
-LOCATION:Estádio José Alvalade, Lisbon
-DESCRIPTION:UEFA Champions League | Matchweek 13
-END:VEVENT
-BEGIN:VEVENT
-DTSTART:20260411T113000Z
-SUMMARY:Arsenal vs Bournemouth (H)
-LOCATION:Emirates Stadium, London
-DESCRIPTION:Premier League | Matchweek 32
-END:VEVENT
-BEGIN:VEVENT
-DTSTART:20260415T190000Z
-SUMMARY:Arsenal vs Sporting CP (H)
-LOCATION:Emirates Stadium, London
-DESCRIPTION:UEFA Champions League | Matchweek 14
-END:VEVENT
-BEGIN:VEVENT
-DTSTART:20260419T153000Z
-SUMMARY:Manchester City vs Arsenal (A)
-LOCATION:Etihad Stadium, Manchester
-DESCRIPTION:Premier League | Matchweek 33
-END:VEVENT
-BEGIN:VEVENT
-DTSTART:20260425T163000Z
-SUMMARY:Arsenal vs Newcastle United (H)
-LOCATION:Emirates Stadium, London
-DESCRIPTION:Premier League | Matchweek 34
-END:VEVENT
-BEGIN:VEVENT
-DTSTART:20260429T190000Z
-SUMMARY:Atlético de Madrid vs Arsenal (A)
-LOCATION:Riyadh Air Metropolitano, Madrid
-DESCRIPTION:UEFA Champions League | Matchweek 15
-END:VEVENT
-BEGIN:VEVENT
-DTSTART:20260502T163000Z
-SUMMARY:Arsenal vs Fulham (H)
-LOCATION:Emirates Stadium, London
-DESCRIPTION:Premier League | Matchweek 35
-END:VEVENT
-BEGIN:VEVENT
-DTSTART:20260505T190000Z
-SUMMARY:Arsenal vs Atlético de Madrid (H)
-LOCATION:Emirates Stadium, London
-DESCRIPTION:UEFA Champions League | Matchweek 16
-END:VEVENT
-BEGIN:VEVENT
-DTSTART:20260510T153000Z
-SUMMARY:West Ham United vs Arsenal (A)
-LOCATION:London Stadium, London
-DESCRIPTION:Premier League | Matchweek 36
-END:VEVENT
-BEGIN:VEVENT
-DTSTART:20260517T140000Z
-SUMMARY:Arsenal vs Burnley (H)
-LOCATION:Emirates Stadium, London
-DESCRIPTION:Premier League | Matchweek 37
-END:VEVENT
-BEGIN:VEVENT
-DTSTART:20260524T150000Z
-SUMMARY:Crystal Palace vs Arsenal (A)
-LOCATION:Selhurst Park, London
-DESCRIPTION:Premier League | Matchweek 38
-END:VEVENT
-BEGIN:VEVENT
-DTSTART:20260805T183000Z
-SUMMARY:Arsenal v Real Betis (N)
-LOCATION:Aviva Stadium
-DESCRIPTION:Pre-season
-END:VEVENT
-END:VCALENDAR`;
 
 /* ── Constants ── */
 const MONTHS = ['January','February','March','April','May','June',
@@ -425,7 +349,7 @@ class Calendar {
   constructor() {
     this.today      = new Date();
     this.current    = new Date(this.today);
-    this.arsenalMap = parseIcs(ARSENAL_ICS);
+    this.arsenalMap = new Map();
     this.holidayMap = new Map();
 
     this._$ = id => document.getElementById(id);
@@ -516,14 +440,22 @@ class Calendar {
   }
 
   async fetchLiveArsenal() {
-    const url = 'https://ics.ecal.com/ecal-sub/69e78417a04db9000291d29e/Arsenal%20FC.ics';
-    const r   = await fetch(url, { signal: AbortSignal.timeout(8000) });
-    if (!r.ok) return;
-    const text = await r.text();
-    const fresh = parseIcs(text);
-    if (fresh.size > 0) {
-      this.arsenalMap = fresh;
-      this.render();
+    const urls = [
+      'https://ics.ecal.com/ecal-sub/69e78417a04db9000291d29e/Arsenal%20FC.ics',
+      'https://raw.githubusercontent.com/farizdp/web-data-store/main/lab-fariz-id/tanggal-merah/Arsenal_FC.ics',
+    ];
+    for (const url of urls) {
+      try {
+        const r = await fetch(url, { signal: AbortSignal.timeout(8000) });
+        if (!r.ok) continue;
+        const text = await r.text();
+        const fresh = parseIcs(text);
+        if (fresh.size > 0) {
+          this.arsenalMap = fresh;
+          this.render();
+          return;
+        }
+      } catch { /* try next */ }
     }
   }
 
